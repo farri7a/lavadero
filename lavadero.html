@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0e141b">
+<title>Caja del lavadero</title>
+<style>
+:root{
+  --bg:#0e141b; --panel:#16202b; --btn:#1f2c3a; --line:#2c3d50;
+  --text:#e8eef5; --muted:#8aa0b5; --accent:#38c6f4; --on-accent:#06202c; --bad:#ff7a7a;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0}
+body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  padding:14px 14px calc(120px + env(safe-area-inset-bottom,0px));max-width:640px;margin:0 auto;padding-top:calc(14px + env(safe-area-inset-top,0px))}
+h2{font-size:15px;font-weight:600;color:var(--muted);margin:22px 2px 10px}
+section:first-of-type h2{margin-top:6px}
+.grid{display:grid;gap:10px}
+.c2{grid-template-columns:repeat(2,1fr)}
+.c3{grid-template-columns:repeat(3,1fr)}
+.c4{grid-template-columns:repeat(4,1fr)}
+button{font:inherit;color:var(--text);background:var(--btn);border:2px solid transparent;border-radius:14px;
+  min-height:66px;padding:8px 6px;font-size:17px;font-weight:600;cursor:pointer;touch-action:manipulation;
+  transition:transform .08s,background .15s}
+button:active{transform:scale(.96)}
+button:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+button.on{background:var(--accent);color:var(--on-accent)}
+button.ask{border:2px dashed var(--line)}
+button.ask.on{border-color:var(--accent)}
+button.add{min-height:56px;font-size:16px;background:#1b3447}
+button.small{min-height:44px;font-size:14px;font-weight:500;color:var(--muted);background:transparent;border:1px solid var(--line)}
+#noteWrap{display:none;margin-top:10px}
+#noteWrap.show{display:block}
+#note{width:100%;font:inherit;font-size:17px;padding:14px;border-radius:12px;border:2px solid var(--line);background:var(--panel);color:var(--text)}
+#note:focus{outline:none;border-color:var(--accent)}
+.display{background:var(--panel);border-radius:16px;padding:16px;margin:14px 0 10px;text-align:center}
+#total{font-size:52px;font-weight:800;letter-spacing:-1px;font-variant-numeric:tabular-nums}
+#detail{color:var(--muted);font-size:15px;min-height:20px;margin-top:4px}
+.row{display:flex;gap:10px;margin-top:10px}
+.row button{flex:1}
+.bar{position:fixed;left:0;right:0;bottom:0;padding:12px 14px calc(12px + env(safe-area-inset-bottom,0px));
+  background:linear-gradient(transparent,var(--bg) 30%)}
+.bar button{display:block;width:100%;max-width:612px;margin:0 auto;min-height:72px;font-size:21px;font-weight:800;
+  background:var(--accent);color:var(--on-accent);letter-spacing:.5px}
+.bar button:disabled{background:var(--btn);color:#5d7186;cursor:not-allowed}
+#msg{position:fixed;inset:0;display:none;align-items:center;justify-content:center;flex-direction:column;
+  background:rgba(14,20,27,.96);z-index:10;text-align:center;padding:20px}
+#msg.show{display:flex}
+#msg .big{font-size:64px;line-height:1}
+#msg p{font-size:22px;font-weight:700;margin:14px 0 4px}
+#msg small{color:var(--muted);font-size:16px}
+#msg.err p{color:var(--bad)}
+@media (prefers-reduced-motion:reduce){button{transition:none}}
+</style>
+</head>
+<body>
+
+<section>
+  <h2>Vehículo</h2>
+  <div class="grid c3" id="vehicles"></div>
+  <div id="noteWrap"><input id="note" type="text" maxlength="60" placeholder="Aclaración (opcional)" autocomplete="off"></div>
+</section>
+
+<section>
+  <h2>Servicios</h2>
+  <div class="grid c2" id="services"></div>
+</section>
+
+<section>
+  <h2>Monto</h2>
+  <div class="grid c4" id="bases"></div>
+  <div class="grid c4" id="extras" style="margin-top:10px"></div>
+  <div class="display">
+    <div id="total">$0</div>
+    <div id="detail"></div>
+  </div>
+  <div class="row">
+    <button class="small" id="undo">Deshacer ajuste</button>
+    <button class="small" id="clear">Borrar monto</button>
+  </div>
+</section>
+
+<section>
+  <h2>Medio de pago</h2>
+  <div class="grid c2" id="pays"></div>
+</section>
+
+<div class="bar"><button id="go" disabled>REGISTRAR LAVADO</button></div>
+
+<div id="msg"><div class="big" id="msgIcon"></div><p id="msgTitle"></p><small id="msgSub"></small></div>
+
+<script>
+// 1) Pegá acá la URL de tu Apps Script (Implementar > Aplicación web)
+const SCRIPT_URL = "PEGAR_AQUI_URL_DE_APPS_SCRIPT";
+
+const VEHICLES = ["Auto Chico","Sedán / Hatch","SUV","Camioneta","Utilitario","Moto","Camión","Motorhome","Otro"];
+const ASK = ["Camión","Motorhome","Otro"];
+const SERVICES = ["Carrocería","Interior","Motor","Chasis/Barro","Cera","Tapizados"];
+const BASES = [10000,15000,20000,25000,30000,35000,40000,50000];
+const EXTRAS = [500,1000,2000,5000];
+const PAYS = ["Efectivo","MP","QR","Transf / Débito"];
+
+const S = {vehicle:null, services:new Set(), base:0, extras:[], pay:null};
+const $ = id => document.getElementById(id);
+const money = n => "$" + String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+const total = () => S.base + S.extras.reduce((a,b)=>a+b,0);
+
+function make(parent, items, cls, onTap, label){
+  items.forEach(v=>{
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = cls(v);
+    b.textContent = label ? label(v) : v;
+    b.dataset.v = v;
+    b.onclick = () => onTap(v, b);
+    $(parent).appendChild(b);
+  });
+}
+function mark(parent, test){
+  [...$(parent).children].forEach(b => b.classList.toggle("on", test(b.dataset.v)));
+}
+
+make("vehicles", VEHICLES, v => ASK.includes(v) ? "ask" : "", v => {
+  S.vehicle = v;
+  mark("vehicles", x => x === v);
+  const wrap = $("noteWrap");
+  wrap.classList.toggle("show", ASK.includes(v));
+  if(!ASK.includes(v)) $("note").value = "";
+  else $("note").focus();
+  refresh();
+});
+make("services", SERVICES, () => "", v => {
+  S.services.has(v) ? S.services.delete(v) : S.services.add(v);
+  mark("services", x => S.services.has(x));
+});
+make("bases", BASES, () => "", v => {
+  S.base = v;
+  mark("bases", x => +x === v);
+  refresh();
+}, v => "$" + v/1000 + "k");
+make("extras", EXTRAS, () => "add", v => { S.extras.push(v); refresh(); }, v => "+" + money(v));
+make("pays", PAYS, () => "", v => {
+  S.pay = v;
+  mark("pays", x => x === v);
+  refresh();
+});
+
+$("undo").onclick = () => { S.extras.pop(); refresh(); };
+$("clear").onclick = () => { S.base = 0; S.extras = []; mark("bases", () => false); refresh(); };
+
+function refresh(){
+  const t = total();
+  $("total").textContent = money(t);
+  const parts = [];
+  if(S.base) parts.push("Base " + money(S.base));
+  S.extras.forEach(e => parts.push("+ " + money(e)));
+  $("detail").textContent = parts.join("  ");
+  $("go").disabled = !(S.vehicle && t > 0 && S.pay);
+}
+
+function reset(){
+  S.vehicle = null; S.services.clear(); S.base = 0; S.extras = []; S.pay = null;
+  $("note").value = ""; $("noteWrap").classList.remove("show");
+  ["vehicles","services","bases","pays"].forEach(p => mark(p, () => false));
+  refresh();
+  window.scrollTo({top:0});
+}
+
+function showMsg(ok, title, sub){
+  $("msg").className = "show" + (ok ? "" : " err");
+  $("msgIcon").textContent = ok ? "✅" : "⚠️";
+  $("msgTitle").textContent = title;
+  $("msgSub").textContent = sub || "";
+  setTimeout(() => $("msg").classList.remove("show"), ok ? 1600 : 3200);
+}
+
+$("go").onclick = async () => {
+  if($("go").disabled) return;
+  if(SCRIPT_URL.startsWith("PEGAR")){ showMsg(false, "Falta configurar la URL del script"); return; }
+  const note = $("note").value.trim();
+  const payload = {
+    vehiculo: S.vehicle + (note ? " – " + note : ""),
+    servicios: SERVICES.filter(s => S.services.has(s)).join(", "),
+    monto: total(),
+    pago: S.pay
+  };
+  const btn = $("go");
+  btn.disabled = true;
+  btn.textContent = "ENVIANDO…";
+  try{
+    const r = await fetch(SCRIPT_URL, {
+      method: "POST",
+      headers: {"Content-Type": "text/plain;charset=utf-8"},
+      body: JSON.stringify(payload)
+    });
+    const j = await r.json();
+    if(!j.ok) throw new Error(j.error || "Error del script");
+    showMsg(true, "Lavado registrado", money(payload.monto) + " · " + payload.pago);
+    reset();
+  }catch(e){
+    showMsg(false, "No se pudo registrar", "Revisá la conexión. Los datos siguen cargados.");
+  }finally{
+    btn.textContent = "REGISTRAR LAVADO";
+    refresh();
+  }
+};
+refresh();
+</script>
+</body>
+</html>
