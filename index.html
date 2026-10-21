@@ -51,10 +51,13 @@ button.small{min-height:44px;font-size:14px;font-weight:500;color:var(--muted);b
 #msg p{font-size:22px;font-weight:700;margin:14px 0 4px}
 #msg small{color:var(--muted);font-size:16px}
 #msg.err p{color:var(--bad)}
+#nojs{background:#3a1f24;color:#ffd0d0;border-radius:12px;padding:14px;margin-bottom:12px;font-size:15px;line-height:1.4}
 @media (prefers-reduced-motion:reduce){button{transition:none}}
 </style>
 </head>
 <body>
+
+<div id="nojs">La app no se pudo iniciar. Abrí el archivo directamente en Chrome o Safari, no en una vista previa. <span id="jserr"></span></div>
 
 <section>
   <h2>Vehículo</h2>
@@ -91,8 +94,12 @@ button.small{min-height:44px;font-size:14px;font-weight:500;color:var(--muted);b
 <div id="msg"><div class="big" id="msgIcon"></div><p id="msgTitle"></p><small id="msgSub"></small></div>
 
 <script>
+const nojs = document.getElementById("nojs");
+nojs.style.display = "none";
+window.addEventListener("error", e => { nojs.style.display = "block"; document.getElementById("jserr").textContent = "(" + e.message + ")"; });
+
 // 1) Pegá acá la URL de tu Apps Script (Implementar > Aplicación web)
-const SCRIPT_URL = https://script.google.com/macros/s/AKfycbwVTkgNMYV5-IZbVGYywf9Dge0iVvVB1qxNZxbz4wthERYHRYCnD48-eHUM1wF4APM/exec;
+const SCRIPT_URL = "PEGAR_AQUI_URL_DE_APPS_SCRIPT";
 
 const VEHICLES = ["Auto Chico","Sedán / Hatch","SUV","Camioneta","Utilitario","Moto","Camión","Motorhome","Otro"];
 const ASK = ["Camión","Motorhome","Otro"];
